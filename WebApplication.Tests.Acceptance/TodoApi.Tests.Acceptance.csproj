@@ -44,4 +44,8 @@
     <Folder Include="Support\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\TodoApi\TodoApi.csproj" />
+  </ItemGroup>
+
 </Project>

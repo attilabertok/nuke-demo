@@ -1,44 +1,23 @@
-namespace WebApplication.Tests.Acceptance.StepDefinitions
+namespace TodoApi.Tests.Acceptance.StepDefinitions
 {
     [Binding]
     public sealed class CalculatorStepDefinitions
     {
-        // For additional details on SpecFlow step definitions see https://go.specflow.org/doc-stepdef
+        private WeatherForecast? sut;
 
-        [Given("the first number is (.*)")]
-        public void GivenTheFirstNumberIs(int number)
+        [Given("a weather forecast with a temperature of (.*) celsius")]
+        public void GivenAWeatherForecastWithATemperatureOfCelsius(int number)
         {
-            //TODO: implement arrange (precondition) logic
-            // For storing and retrieving scenario-specific data see https://go.specflow.org/doc-sharingdata
-            // To use the multiline text or the table argument of the scenario,
-            // additional string/Table parameters can be defined on the step definition
-            // method. 
-
-            throw new PendingStepException();
+            sut = new WeatherForecast
+            {
+                TemperatureC = number
+            };
         }
 
-        [Given("the second number is (.*)")]
-        public void GivenTheSecondNumberIs(int number)
+        [Then("the temperature in fahrenheit should be (.*)")]
+        public void TheTemperatureInFahrenheitShouldBe(int result)
         {
-            //TODO: implement arrange (precondition) logic
-
-            throw new PendingStepException();
-        }
-
-        [When("the two numbers are added")]
-        public void WhenTheTwoNumbersAreAdded()
-        {
-            //TODO: implement act (action) logic
-
-            throw new PendingStepException();
-        }
-
-        [Then("the result should be (.*)")]
-        public void ThenTheResultShouldBe(int result)
-        {
-            //TODO: implement assert (verification) logic
-
-            throw new PendingStepException();
+            sut!.TemperatureF.Should().Be(result);
         }
     }
 }
