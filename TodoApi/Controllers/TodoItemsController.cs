@@ -15,26 +15,25 @@ namespace TodoApi.Controllers
     public class TodoItemsController : ControllerBase
     #endregion
     {
-        private readonly TodoContext _context;
+        private readonly TodoContext context;
 
         public TodoItemsController(TodoContext context)
         {
-            _context = context;
+            this.context = context;
         }
 
         // GET: api/TodoItems
         [HttpGet]
         public async Task<ActionResult<IEnumerable<TodoItem>>> GetTodoItems()
         {
-            return await _context.TodoItems.ToListAsync();
+            return await context.TodoItems.ToListAsync();
         }
 
         // GET: api/TodoItems/5
-        #region snippet_GetByID
         [HttpGet("{id}")]
         public async Task<ActionResult<TodoItem>> GetTodoItem(long id)
         {
-            var todoItem = await _context.TodoItems.FindAsync(id);
+            var todoItem = await context.TodoItems.FindAsync(id);
 
             if (todoItem == null)
             {
@@ -43,11 +42,9 @@ namespace TodoApi.Controllers
 
             return todoItem;
         }
-        #endregion
 
         // PUT: api/TodoItems/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        #region snippet_Update
         [HttpPut("{id}")]
         public async Task<IActionResult> PutTodoItem(long id, TodoItem todoItem)
         {
@@ -56,27 +53,19 @@ namespace TodoApi.Controllers
                 return BadRequest();
             }
 
-            _context.Entry(todoItem).State = EntityState.Modified;
+            context.Entry(todoItem).State = EntityState.Modified;
 
             try
             {
-                await _context.SaveChangesAsync();
+                await context.SaveChangesAsync();
             }
-            catch (DbUpdateConcurrencyException)
+            catch (DbUpdateConcurrencyException) when (!TodoItemExists(id))
             {
-                if (!TodoItemExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
+                return NotFound();
             }
 
             return NoContent();
         }
-        #endregion
 
         // POST: api/TodoItems
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
@@ -84,8 +73,8 @@ namespace TodoApi.Controllers
         [HttpPost]
         public async Task<ActionResult<TodoItem>> PostTodoItem(TodoItem todoItem)
         {
-            _context.TodoItems.Add(todoItem);
-            await _context.SaveChangesAsync();
+            context.TodoItems.Add(todoItem);
+            await context.SaveChangesAsync();
 
             //return CreatedAtAction("GetTodoItem", new { id = todoItem.Id }, todoItem);
             return CreatedAtAction(nameof(GetTodoItem), new { id = todoItem.Id }, todoItem);
@@ -93,26 +82,24 @@ namespace TodoApi.Controllers
         #endregion
 
         // DELETE: api/TodoItems/5
-        #region snippet_Delete
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTodoItem(long id)
         {
-            var todoItem = await _context.TodoItems.FindAsync(id);
+            var todoItem = await context.TodoItems.FindAsync(id);
             if (todoItem == null)
             {
                 return NotFound();
             }
 
-            _context.TodoItems.Remove(todoItem);
-            await _context.SaveChangesAsync();
+            context.TodoItems.Remove(todoItem);
+            await context.SaveChangesAsync();
 
             return NoContent();
         }
-        #endregion
 
         private bool TodoItemExists(long id)
         {
-            return _context.TodoItems.Any(e => e.Id == id);
+            return context.TodoItems.Any(e => e.Id == id);
         }
     }
 }
