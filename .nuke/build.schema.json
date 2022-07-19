@@ -74,9 +74,13 @@
             "enum": [
               "Clean",
               "Compile",
-              "PrintVersion",
               "Restore",
-              "RunUnitTests"
+              "Status",
+              "Test",
+              "TestAcceptance",
+              "TestFunctional",
+              "TestUnit",
+              "Version"
             ]
           }
         },
@@ -92,9 +96,13 @@
             "enum": [
               "Clean",
               "Compile",
-              "PrintVersion",
               "Restore",
-              "RunUnitTests"
+              "Status",
+              "Test",
+              "TestAcceptance",
+              "TestFunctional",
+              "TestUnit",
+              "Version"
             ]
           }
         },

@@ -5,6 +5,7 @@ using Nuke.Common;
 using Nuke.Common.CI;
 using Nuke.Common.CI.AzurePipelines;
 using Nuke.Common.Execution;
+using Nuke.Common.Git;
 using Nuke.Common.IO;
 using Nuke.Common.ProjectModel;
 using Nuke.Common.Tooling;
@@ -18,12 +19,13 @@ using static Nuke.Common.ControlFlow;
 using static Nuke.Common.Tools.DotNet.DotNetTasks;
 using static Nuke.Common.IO.FileSystemTasks;
 using static Nuke.Common.IO.PathConstruction;
+using Assert = Nuke.Common.Assert;
 
 [ShutdownDotNetAfterServerBuild]
 [AzurePipelines(
     AzurePipelinesImage.WindowsLatest,
     InvokedTargets = new[] { nameof(Compile) })]
-class Build : NukeBuild
+public class Build : NukeBuild
 {
     public static int Main () => Execute<Build>(x => x.Compile);
 
@@ -32,6 +34,12 @@ class Build : NukeBuild
     [GitVersion]
     readonly GitVersion GitVersion;
 
+    [GitRepository]
+    readonly GitRepository GitRepository;
+
+    [PathExecutable]
+    readonly Tool Git;
+
     [Solution(GenerateProjects = true)] readonly Solution Solution;
 
     [Parameter("Configuration to build - Default is 'Debug' (local) or 'Release' (server)")]
@@ -39,13 +47,9 @@ class Build : NukeBuild
 
     const string MainBranch = "main";
 
-    [PackageExecutable(
-        packageId: "xunit.runner.console",
-        packageExecutable: "xunit.console.exe")]
-    readonly Tool Xunit;
+    IDictionary<string, Project> TestProjects => Partition.GetCurrent(Solution.GetProjects($"*.{NameSegment.Tests}.*"))
+        .ToDictionary(ProjectHelper.GetTestProjectType, ProjectHelper.Self);
 
-
-    IEnumerable<Project> TestProjects => Partition.GetCurrent(Solution.GetProjects("*.Tests.*"));
 
     Target Clean => _ => _
         .Before(Restore)
@@ -56,10 +60,16 @@ class Build : NukeBuild
             pathsToClean.ForEach(DeleteDirectory);
         });
 
-    Target PrintVersion => _ => _
+    Target Version => _ => _
         .Executes(() =>
         {
             Log.Information("GitVersion = {Value}", GitVersion.MajorMinorPatch);
+        });
+
+    Target Status => _ => _
+        .Executes(() =>
+        {
+            Git("status");
         });
 
     Target Restore => _ => _
@@ -84,9 +94,50 @@ class Build : NukeBuild
                 .SetInformationalVersion(GitVersion.InformationalVersion));
         });
 
-    Target RunUnitTests => _ => _
+    Target TestUnit => _ => _
         .DependsOn(Compile)
+        .ProceedAfterFailure()
         .Executes(() =>
         {
+            DotNetTest(s => s
+                .SetProjectFile(TestProjects[NameSegment.TestType.Unit])
+                .EnableNoRestore()
+                .EnableNoBuild()
+                .SetFilter(NameSegment.TestType.Unit)
+            );
         });
+
+    Target TestFunctional => _ => _
+        .DependsOn(Compile)
+        .ProceedAfterFailure()
+        .Executes(() =>
+        {
+            Assert.False(GitRepository.IsOnDevelopBranch());
+            DotNetTest(s => s
+                .SetProjectFile(TestProjects[NameSegment.TestType.Functional])
+                .EnableNoRestore()
+                .EnableNoBuild()
+                .SetFilter(NameSegment.TestType.Functional)
+            );
+        });
+
+    Target TestAcceptance => _ => _
+        .DependsOn(Compile)
+        .ProceedAfterFailure()
+        .Executes(() =>
+        {
+            DotNetTest(s => s
+                .SetProjectFile(TestProjects[NameSegment.TestType.Acceptance])
+                .EnableNoRestore()
+                .EnableNoBuild()
+                .SetFilter(NameSegment.TestType.Acceptance)
+            );
+        });
+
+    Target Test => _ => _
+        .DependsOn(Compile)
+        .DependsOn(TestUnit)
+        .DependsOn(TestAcceptance)
+        .DependsOn(TestFunctional)
+        .Executes(() => { });
 }
