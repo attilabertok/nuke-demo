@@ -42,6 +42,8 @@ public class Build : NukeBuild
 
     [Solution(GenerateProjects = true)] readonly Solution Solution;
 
+    public IProcess ApiProcess { get; set; }
+
     [Parameter("Configuration to build - Default is 'Debug' (local) or 'Release' (server)")]
     readonly Configuration Configuration = IsLocalBuild ? Configuration.Debug : Configuration.Release;
 
@@ -107,19 +109,36 @@ public class Build : NukeBuild
             );
         });
 
+    Target StartApi => _ => _
+        .Unlisted()
+        .Executes(() =>
+            {
+                ApiProcess = ProcessTasks.StartProcess("dotnet", "run", Solution.TodoApi.Directory);
+            }
+        );
+
     Target TestFunctional => _ => _
-        .DependsOn(Compile)
+        .DependsOn(Compile, StartApi)
+        .OnlyWhenDynamic(() => !GitRepository.IsOnFeatureBranch())
         .ProceedAfterFailure()
         .Executes(() =>
         {
-            Assert.False(GitRepository.IsOnDevelopBranch());
             DotNetTest(s => s
                 .SetProjectFile(TestProjects[NameSegment.TestType.Functional])
                 .EnableNoRestore()
                 .EnableNoBuild()
                 .SetFilter(NameSegment.TestType.Functional)
             );
-        });
+        })
+        .Triggers(StopApi);
+
+    Target StopApi => _ => _
+        .Unlisted()
+        .Executes(() =>
+            {
+                ApiProcess.Kill();
+            }
+        );
 
     Target TestAcceptance => _ => _
         .DependsOn(Compile)
