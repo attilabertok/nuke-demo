@@ -4,6 +4,7 @@ using System.Linq;
 using Nuke.Common;
 using Nuke.Common.CI;
 using Nuke.Common.CI.AzurePipelines;
+using Nuke.Common.CI.AzurePipelines.Configuration;
 using Nuke.Common.Execution;
 using Nuke.Common.Git;
 using Nuke.Common.IO;
@@ -12,6 +13,7 @@ using Nuke.Common.Tooling;
 using Nuke.Common.Tools.Coverlet;
 using Nuke.Common.Tools.DotNet;
 using Nuke.Common.Tools.GitVersion;
+using Nuke.Common.Tools.ReportGenerator;
 using Nuke.Common.Utilities.Collections;
 using Serilog;
 
@@ -37,6 +39,8 @@ public class Build : NukeBuild
 
     [CI] readonly AzurePipelines AzurePipelines;
 
+    [Partition(3, Name = "Test Run Partition")] readonly Partition TestPartition = new() {Total = 3};
+
     [GitVersion]
     readonly GitVersion GitVersion;
 
@@ -59,7 +63,7 @@ public class Build : NukeBuild
 
     List<string> testFilter = Enumerable.Empty<string>().ToList();
 
-    IDictionary<string, Project> TestProjects => Partition.GetCurrent(Solution.GetProjects($"*.{NameSegment.Tests}.*"))
+    IDictionary<string, Project> TestProjects => TestPartition.GetCurrent(Solution.GetProjects($"*.{NameSegment.Tests}.*"))
         .ToDictionary(ProjectHelper.GetTestProjectType, ProjectHelper.Self);
 
 
@@ -165,6 +169,7 @@ public class Build : NukeBuild
         .Triggers(TestExecute);
 
     Target TestExecute => _ => _
+        .Partition(TestPartition.Total)
         .DependsOn(Compile, StartApi)
         .Executes(() =>
         {
