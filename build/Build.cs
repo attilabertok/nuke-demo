@@ -32,12 +32,13 @@ public class Folder
 [ShutdownDotNetAfterServerBuild]
 [AzurePipelines(
     AzurePipelinesImage.WindowsLatest,
-    InvokedTargets = new[] { nameof(Compile) })]
+    InvokedTargets = new[] { nameof(Compile) },
+    CacheKeyFiles = new string[0])]
 public class Build : NukeBuild
 {
     public static int Main () => Execute<Build>(x => x.Compile);
 
-    [CI] readonly AzurePipelines AzurePipelines;
+    [CI] readonly AzurePipelines AzurePipelines = AzurePipelines.Instance;
 
     [Partition(3, Name = "Test Run Partition")] readonly Partition TestPartition = new() {Total = 3};
 
