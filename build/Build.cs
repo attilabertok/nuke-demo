@@ -9,6 +9,7 @@ using Nuke.Common.Git;
 using Nuke.Common.IO;
 using Nuke.Common.ProjectModel;
 using Nuke.Common.Tooling;
+using Nuke.Common.Tools.Coverlet;
 using Nuke.Common.Tools.DotNet;
 using Nuke.Common.Tools.GitVersion;
 using Nuke.Common.Utilities.Collections;
@@ -20,6 +21,11 @@ using static Nuke.Common.Tools.DotNet.DotNetTasks;
 using static Nuke.Common.IO.FileSystemTasks;
 using static Nuke.Common.IO.PathConstruction;
 using Assert = Nuke.Common.Assert;
+
+public class Folder
+{
+    public const string TestResults = ".test_results";
+}
 
 [ShutdownDotNetAfterServerBuild]
 [AzurePipelines(
@@ -47,7 +53,11 @@ public class Build : NukeBuild
     [Parameter("Configuration to build - Default is 'Debug' (local) or 'Release' (server)")]
     readonly Configuration Configuration = IsLocalBuild ? Configuration.Debug : Configuration.Release;
 
+    readonly AbsolutePath TestResultsDirectory = RootDirectory / Folder.TestResults;
+
     const string MainBranch = "main";
+
+    List<string> testFilter = Enumerable.Empty<string>().ToList();
 
     IDictionary<string, Project> TestProjects => Partition.GetCurrent(Solution.GetProjects($"*.{NameSegment.Tests}.*"))
         .ToDictionary(ProjectHelper.GetTestProjectType, ProjectHelper.Self);
@@ -77,7 +87,7 @@ public class Build : NukeBuild
     Target Restore => _ => _
         .Executes(() =>
         {
-            DotNetRestore(s => s
+            DotNetRestore(_ => _
                 .SetProjectFile(Solution)
                 .EnableNoCache());
         });
@@ -86,7 +96,7 @@ public class Build : NukeBuild
         .DependsOn(Restore)
         .Executes(() =>
         {
-            DotNetBuild(s => s
+            DotNetBuild(_ => _
                 .SetProjectFile(Solution)
                 .SetConfiguration(Configuration)
                 .EnableNoLogo()
@@ -101,16 +111,14 @@ public class Build : NukeBuild
         .ProceedAfterFailure()
         .Executes(() =>
         {
-            DotNetTest(s => s
-                .SetProjectFile(TestProjects[NameSegment.TestType.Unit])
-                .EnableNoRestore()
-                .EnableNoBuild()
-                .SetFilter(NameSegment.TestType.Unit)
-            );
-        });
+            testFilter = new List<string>{ NameSegment.TestType.Unit };
+            Log.Information($"Test filter set to {string.Join(", ", testFilter)} Tests.");
+        })
+        .Triggers(TestExecute);
 
     Target StartApi => _ => _
         .Unlisted()
+        .OnlyWhenDynamic(() => testFilter.Contains(NameSegment.TestType.Functional))
         .Executes(() =>
             {
                 ApiProcess = ProcessTasks.StartProcess("dotnet", "run", Solution.TodoApi.Directory);
@@ -118,22 +126,19 @@ public class Build : NukeBuild
         );
 
     Target TestFunctional => _ => _
-        .DependsOn(Compile, StartApi)
+        .DependsOn(Compile)
         .OnlyWhenDynamic(() => !GitRepository.IsOnFeatureBranch())
         .ProceedAfterFailure()
         .Executes(() =>
         {
-            DotNetTest(s => s
-                .SetProjectFile(TestProjects[NameSegment.TestType.Functional])
-                .EnableNoRestore()
-                .EnableNoBuild()
-                .SetFilter(NameSegment.TestType.Functional)
-            );
+            testFilter = new List<string> {NameSegment.TestType.Functional };
+            Log.Information($"Test filter set to {string.Join(", ", testFilter)} Tests.");
         })
-        .Triggers(StopApi);
+        .Triggers(TestExecute);
 
     Target StopApi => _ => _
         .Unlisted()
+        .OnlyWhenDynamic(() => testFilter.Contains(NameSegment.TestType.Functional))
         .Executes(() =>
             {
                 ApiProcess.Kill();
@@ -145,18 +150,37 @@ public class Build : NukeBuild
         .ProceedAfterFailure()
         .Executes(() =>
         {
-            DotNetTest(s => s
-                .SetProjectFile(TestProjects[NameSegment.TestType.Acceptance])
-                .EnableNoRestore()
-                .EnableNoBuild()
-                .SetFilter(NameSegment.TestType.Acceptance)
-            );
-        });
+            testFilter = new List<string> {NameSegment.TestType.Acceptance };
+            Log.Information($"Test filter set to {string.Join(", ", testFilter)} Tests.");
+        })
+        .Triggers(TestExecute);
 
     Target Test => _ => _
         .DependsOn(Compile)
-        .DependsOn(TestUnit)
-        .DependsOn(TestAcceptance)
-        .DependsOn(TestFunctional)
-        .Executes(() => { });
+        .Executes(() =>
+        {
+            testFilter = new List<string> { NameSegment.TestType.Acceptance, NameSegment.TestType.Functional, NameSegment.TestType.Unit };
+            Log.Information($"Test filter set to {string.Join(", ", testFilter)} Tests.");
+        })
+        .Triggers(TestExecute);
+
+    Target TestExecute => _ => _
+        .DependsOn(Compile, StartApi)
+        .Executes(() =>
+        {
+            DotNetTest(_ => _
+                    .SetResultsDirectory(TestResultsDirectory)
+                    .EnableCollectCoverage()
+                    .SetCoverletOutputFormat(CoverletOutputFormat.cobertura)
+                    .SetDataCollector("XPlat Code Coverage")
+                    .EnableNoRestore()
+                    .EnableNoBuild()
+                    .CombineWith(TestProjects.Where(project => testFilter.Contains(project.Key)), (_, testProject) => _
+                        .SetProjectFile(testProject.Value)
+                        .SetLoggers($"trx;LogFileName={testProject.Value.Name}.trx")
+                        .SetCoverletOutput(TestResultsDirectory / $"{testProject.Value.Name}.xml")
+                        .SetFilter(testProject.Key)),
+                completeOnFailure: true);
+        })
+        .Triggers(StopApi);
 }

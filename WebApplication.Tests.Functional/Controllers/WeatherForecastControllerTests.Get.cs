@@ -15,5 +15,14 @@ public partial class WeatherForecastControllerTests
             forecasts.Should()
                 .HaveCount(5);
         }
+
+        [Fact]
+        public async Task Should_ReturnFiveItemsAgain()
+        {
+            var forecasts = await Client.GetFromJsonAsync<List<WeatherForecast>>("/WeatherForecast");
+
+            forecasts.Should()
+                .HaveCount(5);
+        }
     }
 }

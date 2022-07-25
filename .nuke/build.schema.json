@@ -80,6 +80,7 @@
               "StopApi",
               "Test",
               "TestAcceptance",
+              "TestExecute",
               "TestFunctional",
               "TestUnit",
               "Version"
@@ -104,6 +105,7 @@
               "StopApi",
               "Test",
               "TestAcceptance",
+              "TestExecute",
               "TestFunctional",
               "TestUnit",
               "Version"
